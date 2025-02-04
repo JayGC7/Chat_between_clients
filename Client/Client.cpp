@@ -34,10 +34,35 @@ void Client::startClient() {
     }
     cout << "Connected to server" << endl;
     work = true;
-    startChat();
+    //Запуск потоков отправки\получения
+    sendThread = thread(&Client::sendMsg, this, client_sock);
+    recvThread = thread(&Client::recieveMsg, this, client_sock);
+    sendThread.join();
+    recvThread.join();
+    
 }
 
-void Client::startChat() {
-    //while(work){...}
-    cout << "send/recieve msg" << endl;
+void Client::sendMsg(SOCKET client) {
+    //Отпавка сообщения на сервер
+    string message;
+    while (work) {
+        getline(cin, message);
+        if (send(client_sock, message.c_str(), message.size(), 0) == SOCKET_ERROR) {
+            cout << "Send failed" << std::endl;
+            work = false;
+            break;
+        }
+    }
+}
+void Client::recieveMsg(SOCKET client) {
+    //Прием сообщений от сервера
+        char buffer[1024] = { 0 };
+        while (work) {
+            memset(buffer, 0, 1024);
+            if (recv(client, buffer, 1024, 0) <= 0) {
+                cout << "Server disconnected" << endl;
+                break;
+            }
+            cout << "Server: " << buffer << endl;
+        }
 }

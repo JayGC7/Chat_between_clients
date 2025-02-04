@@ -1,4 +1,5 @@
 #include <iostream>
+#include <thread>
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #include <sstream>
@@ -10,11 +11,13 @@ class Client
 {
 private:
     SOCKET client_sock;
+    thread sendThread, recvThread;
     sockaddr_in serv_addr;
     const char* ip = "127.0.0.1";
     bool work;
 
-    void startChat();
+    void recieveMsg(SOCKET client);
+    void sendMsg(SOCKET client);
 public:
     Client();
     ~Client();

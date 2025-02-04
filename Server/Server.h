@@ -17,9 +17,13 @@ private:
     SOCKET server_sock, client_sock; // сокет
     sockaddr_in address;
     int addrlen;
+    //int data;
+    vector<string>que;
+    void sendMsg(SOCKET client);
+
     bool work;
 
-    void pricessingClientSock(SOCKET client);
+    void processingClientSock(SOCKET client);
     void acceptClientConnection();
 
 public:

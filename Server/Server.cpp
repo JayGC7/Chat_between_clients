@@ -37,9 +37,6 @@ Server::~Server() {
 }
 
 void Server::startServer() {
-
-    work = true;
-
     // Ожидание подключений
     if (listen(server_sock, 3) == SOCKET_ERROR) {
         cout << "Listen failed" << endl;
@@ -47,24 +44,63 @@ void Server::startServer() {
         return;
     }
     cout << "Server is listening on port " << PORT << endl;
-
+    work = true;
     acceptClientConnection();
 }
 
 void Server::acceptClientConnection() {
     while (work) {
         //принимаем соединения с клиентами
-        if (client_sock = accept(server_sock, (struct sockaddr*)&address, &addrlen) == INVALID_SOCKET) {
+        client_sock = accept(server_sock, (struct sockaddr*)&address, &addrlen);
+        if (client_sock == INVALID_SOCKET) {
             cout << "Accept failed" << endl;
             closesocket(server_sock);
             return;
         }
-        clients.push_back(thread(&Server::pricessingClientSock, this, client_sock));
-        cout << "new Client connected" << endl;
+        //Запуск потоков отправки\получения
+        clients.push_back(thread(&Server::processingClientSock, this, client_sock));
+        thread sendback(&Server::sendMsg, this, client_sock);
+        clients.back().join();
+        sendback.join();
     }
 
 }
 
-void Server::pricessingClientSock(SOCKET client) {
-    cout << "get/recieve msg" << endl;
+void Server::processingClientSock(SOCKET client) {
+    //Обработка сообщений от клиента
+    cout << "new Client connected" << client<<endl;
+    char buffer[1024];
+    int data;
+    while (work) {
+        data = recv(client, buffer, 1024, 0);
+        if (data <= 0) {
+            cout << client << " disconnected" << endl;
+            break;
+        }
+        else {
+            string message(buffer, data);
+            cout << "Received from " << client << ": " << message << endl;
+            que.push_back(message);            
+        }
+
+
+        //cout << "get/recieve msg" << endl;
+    }
+}
+
+void Server::sendMsg(SOCKET client) {
+    //отправка сообщений клиенту
+    string message;
+    while (work) {
+        if (!que.empty()) {
+            message = que.back();
+            cout << "send   " << message<<endl;
+            que.pop_back();
+            if (send(client, message.c_str(), message.size(), 0) == SOCKET_ERROR) {
+                cout << "Send failed" << std::endl;
+                work = false;
+                break;
+            }
+        }
+    }
 }
