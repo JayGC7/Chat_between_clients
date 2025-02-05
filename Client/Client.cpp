@@ -32,7 +32,7 @@ void Client::startClient() {
         cout << "Connection Failed" << endl;
         return;
     }
-    cout << "Connected to server" << endl;
+    cout << "Client Connected to server" << endl;
     work = true;
     //Запуск потоков отправки\получения
     sendThread = thread(&Client::sendMsg, this, client_sock);
@@ -46,9 +46,11 @@ void Client::sendMsg(SOCKET client) {
     //Отпавка сообщения на сервер
     string message;
     while (work) {
+        cout << "To send a message to certain Client enter: <Client's Number>.<Your message>" << endl;
+        cout << ">>";
         getline(cin, message);
         if (send(client_sock, message.c_str(), message.size(), 0) == SOCKET_ERROR) {
-            cout << "Send failed" << std::endl;
+            cout << "Send failed" << endl;
             work = false;
             break;
         }
@@ -57,12 +59,18 @@ void Client::sendMsg(SOCKET client) {
 void Client::recieveMsg(SOCKET client) {
     //Прием сообщений от сервера
         char buffer[1024] = { 0 };
+        int data;
+        string message;
         while (work) {
             memset(buffer, 0, 1024);
-            if (recv(client, buffer, 1024, 0) <= 0) {
+            data = recv(client, buffer, 1024, 0);
+            if ( data<= 0) {
                 cout << "Server disconnected" << endl;
                 break;
             }
-            cout << "Server: " << buffer << endl;
+            message = string(buffer, data);
+            data = stoi(message.substr(0, message.find(".")));
+            message = message.substr(message.find(".") + 1);
+            cout<<"From "<<data << ": " << message << endl;
         }
 }
