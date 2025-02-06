@@ -28,10 +28,10 @@ private:
     bool work;
     //int data;
     void sendMsg(SOCKET client);
-
-    void processingClientSock(SOCKET client);
+    void sendFile(SOCKET from_client, SOCKET to_client);
+    void sendFile(SOCKET from_client);
+    void receiveData(SOCKET client);
     void acceptClientConnection();
-    void sendFile(SOCKET client);
 
 public:
     Server();

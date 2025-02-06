@@ -64,7 +64,7 @@ void Client::sendMsg() {
             work = false;
             closesocket(client_sock);
             break;
-        }else if (message == "FILE") {//Отправка файла
+        }else if (message.find("FILE")!=-1) {//Отправка файла
             send(client_sock, message.c_str(), message.size(), 0);
             sendFile();
         }else if (send(client_sock, message.c_str(), message.size(), 0) == SOCKET_ERROR) {//Отправка сообщения
@@ -74,10 +74,11 @@ void Client::sendMsg() {
         }
     }
 }
+
 void Client::recieveMsg() {
     //Прием сообщений от сервера
     char buffer[1024] = { 0 };
-    int data;
+    int data, sender;
     string message;
     while (work) {
         memset(buffer, 0, 1024);
@@ -89,16 +90,19 @@ void Client::recieveMsg() {
             return;
         }
         message = string(buffer, data);
-        data = stoi(message.substr(0, message.find(".")));
+        sender = stoi(message.substr(0, message.find(".")));
         message = message.substr(message.find(".") + 1);
-        cout<<"From "<<data << ": " << message << endl;
+        if (message == "FILE") {
+            cout << sender << " send You a file." << endl;
+            recieveFile();
+        }else cout<<"From "<< sender << ": " << message << endl;
     }
 }
 
 void Client::sendFile() {
     string message;
     int file_size;
-    char buffer[1024] = { 0 };
+    char* buffer;
     //считываем название файла и путь
     cout << "Enter name of file" << endl;//+path to
     getline(cin, message);
@@ -107,21 +111,43 @@ void Client::sendFile() {
     //определяем размер файла
     file.seekg(0,ios::end);
     file_size = file.tellg();
+    buffer = (char*)malloc(file_size);
 
     //отправляем название файла и размер
     message += ":" + to_string(file_size);
-    cout << message << endl;
     send(client_sock, message.c_str(), message.size(), 0);
     // Отправляем содержимое файла
-    //Sleep(1000);
-    file.seekg(0);
-    while (!file.eof()) {
-        file.read(buffer, sizeof(buffer));
-        int bytesRead = file.gcount();
-        if (send(client_sock, buffer, bytesRead, 0) == SOCKET_ERROR) {
-            cout << "Failed to send file data\n";
-            break;
-        }
-    }
+    file.read(buffer, file_size);
+    send(client_sock, buffer, file_size, 0);
+    free(buffer);
 }
-void Client::recieveFile() {}
+
+void Client::recieveFile() {
+    char buffer[1024];
+    char* file_ptr;
+    int file_size, data;
+    string file_name;
+    int bytesReceived = 0;
+    int all_data = 0;
+
+    //получаем строку [название_файла:размер_файла]
+    data = recv(client_sock, buffer, 1024, 0);
+    file_name = string(buffer, data);
+    //парсим строку
+    file_size = stoi(file_name.substr(file_name.find(":") + 1));
+    file_name = file_name.substr(0, file_name.find(":"));
+    //Выделяем память для записи получаемого файла
+    file_ptr = (char*)malloc(file_size);
+
+    //cout << "Enter path to save file : " << endl;
+    //getline(cin, file_name);
+    
+    //создаем файл и считываем файл из сокета
+    ofstream file(file_name, ios::binary);
+    
+    recv(client_sock, file_ptr, file_size, 0);
+    file.write(buffer, file_size);
+    
+    cout << "File Recived" << endl;
+    free(file_ptr);
+}

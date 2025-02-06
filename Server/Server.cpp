@@ -74,7 +74,7 @@ void Server::acceptClientConnection() {
         }
 
         //Создание потоков отправки\получения и очередей для подключенного сокета
-        clients_in_stream.push_back(thread(&Server::processingClientSock, this, client_sock));
+        clients_in_stream.push_back(thread(&Server::receiveData, this, client_sock));
         clients_out_stream.push_back(thread(&Server::sendMsg, this, client_sock));
         ques[client_sock] = que;
     }
@@ -90,7 +90,7 @@ void Server::acceptClientConnection() {
 
 }
 
-void Server::processingClientSock(SOCKET client) {
+void Server::receiveData(SOCKET client) {
     //Обработка сообщений от клиента
     cout << "new Client connected: " << client<<endl;
     char buffer[1024];
@@ -109,25 +109,26 @@ void Server::processingClientSock(SOCKET client) {
             if (clients_sock_list.size() == 1) {
                 message = to_string(server_sock) + ".There is no availible Clients";
                 ques[client].push_back(message);
-            }//Если собираются отправить файл
-            else if (message == "FILE") {
-                cout << "Client send file" << endl;
-                sendFile(client);
             }//Проверяем наличие номера сокета получателя...
             else if (message.find(".") != -1) {  
                 recipient = stoi(message.substr(0, message.find(".")));
-                cout << "Get from " << client << ": " << message << endl;
-                message = to_string(client) + "." + message.substr(message.find(".") + 1);//Добавляем номер сокета отправителя
+                message = message.substr(message.find(".") + 1);
+                if (message == "FILE") {
+                    cout << "Client "<<client<<" send file to "<<recipient << endl;
+                    sendFile(client, recipient);
+                }else {
+                    cout << "Get from " << client << ": " << message << endl;        
+                }
                 ques[recipient].push_back(message);
             }//...в случае отсутствия, отправляем всем подключенным клиентам
             else{
-                for (int c : clients_sock_list) {
-                    if (c != client) {
-                        message = to_string(client) + "." + message;
-                        ques[c].push_back(message);
-                    }
+                cout << "Client send file to all connected clients" << endl;
+                for (int recipient_client : clients_sock_list) {
+                    if (recipient_client != client)
+                        ques[recipient_client].push_back(message);                
                 }
-                continue;
+                if (message == "FILE")
+                    sendFile(client);
             }
         }
     }
@@ -142,7 +143,8 @@ void Server::sendMsg(SOCKET client) {
         q = &ques[client];
         if (!q->empty()) {
             message = q->back();
-            cout << "Send to" << client <<": " << message << endl;
+            cout << "Send to " << client <<": " << message << endl;
+            message = to_string(client) + "." + message;
             q->pop_back();
             if (send(client, message.c_str(), message.size(), 0) == SOCKET_ERROR) {
                 cout << "Send failed" << std::endl;
@@ -154,30 +156,55 @@ void Server::sendMsg(SOCKET client) {
     }
 }
 
-void Server::sendFile(SOCKET client) {
+void Server::sendFile(SOCKET from_client, SOCKET to_client) {
     char buffer[1024];
     int file_size, data;
     string file_name;
 
     //получаем строку [название_файла:размер_файла]
-    data = recv(client, buffer, 1024, 0);
+    data = recv(from_client, buffer, 1024, 0);
+    send(to_client, buffer, data, 0);
     file_name = string(buffer, data);
-    cout << "get name:size";
+
     //парсим строку
     file_size = stoi(file_name.substr(file_name.find(":") + 1));
     cout << file_size << endl;
-    file_name = file_name.substr(0, file_name.find(":"));
-    cout << file_name << endl;
 
-    //создаем файл и считываем файл из сокета
-    ofstream file(file_name, ios::binary);
-    //memset(buffer, 1024, 0);
+    //считываем файл из сокета
     int bytesReceived = 0;
     int all_data = 0;
     while (all_data < file_size) {
-        bytesReceived = recv(client, buffer, file_size, 0);
+        bytesReceived = recv(from_client, buffer, sizeof(buffer), 0);
         all_data += bytesReceived;
-        cout << "get file" << file_size << all_data << endl;
-        file.write(buffer, bytesReceived);
+        send(to_client, buffer, bytesReceived, 0);
     }
+}
+
+void Server::sendFile(SOCKET from_client) {
+    char buffer[1024];
+    char* file;
+    int file_size, data;
+    string file_name;
+
+    //получаем строку [название_файла:размер_файла]
+    data = recv(from_client, buffer, 1024, 0);
+    //парсим строку
+    file_name = string(buffer, data);
+    file_size = stoi(file_name.substr(file_name.find(":") + 1));
+    file = (char*)malloc(file_size);
+    int bytesReceived = 0;
+    int all_data = 0;
+    //Получаем файл
+    recv(from_client, file, file_size, 0);
+
+    for (int recipient_client : clients_sock_list) {
+        all_data = 0;
+        if (recipient_client != from_client) {
+            send(recipient_client, file_name.c_str(),file_name.size(), 0);
+            send(recipient_client, file, file_size, 0);
+        }
+    }
+    free(file);
+    //считываем файл из сокета
+    
 }
