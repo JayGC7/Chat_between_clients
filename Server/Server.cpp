@@ -63,6 +63,7 @@ void Server::acceptClientConnection() {
         clients_sock_list.push_back(client_sock);
 
         //Оповещение подключенных клиентов о новом клиете в сети
+        //+Сообщение с информацией о уже подключенных клиентах для нового
         for (int client : clients_sock_list) {
             if (client != client_sock) {
                 new_conn = to_string(server_sock) +"."+ new_conn + to_string(client_sock);
@@ -71,18 +72,20 @@ void Server::acceptClientConnection() {
                 }
             }
         }
+
         //Создание потоков отправки\получения и очередей для подключенного сокета
         clients_in_stream.push_back(thread(&Server::processingClientSock, this, client_sock));
         clients_out_stream.push_back(thread(&Server::sendMsg, this, client_sock));
         ques[client_sock] = que;
     }
+
     //Запуск потоков отправки\получения
-    for (int i = 0; i < clients_in_stream.size(); i++) {
+    /*for (int i = 0; i < clients_in_stream.size(); i++) {
         clients_in_stream.back().join();
         clients_out_stream.back().join();
         clients_in_stream.pop_back();
         clients_out_stream.pop_back();
-    }
+    }*/
     
 
 }
@@ -92,32 +95,41 @@ void Server::processingClientSock(SOCKET client) {
     cout << "new Client connected: " << client<<endl;
     char buffer[1024];
     int recipient;//получатель
+    int data;
     string message;
     while (work) {
-        recipient = recv(client, buffer, 1024, 0);
-        if (recipient <= 0) {
+        data = recv(client, buffer, 1024, 0);
+        if (data<= 0) {
             cout << client << " disconnected" << endl;
             break;
-        }
-        else {
-            message =string(buffer, recipient);
-            //Проверяем наличие номера сокета получателя...
-            if(message.find(".")!=-1)  recipient = stoi(message.substr(0, message.find(".")));
-            else{//...в случае отсутствия, отправляем всем подключенным клиентам
-                for (int client : clients_sock_list) {
-                    if (client != client_sock) {
-                        message = to_string(client_sock) + "." + message;
-                        send(client, message.c_str(), message.size(), 0);
+        } else {
+            message = string(buffer, data);
+
+            //Если только один подключенный клиент
+            if (clients_sock_list.size() == 1) {
+                message = to_string(server_sock) + ".There is no availible Clients";
+                ques[client].push_back(message);
+            }//Если собираются отправить файл
+            else if (message == "FILE") {
+                cout << "Client send file" << endl;
+                sendFile(client);
+            }//Проверяем наличие номера сокета получателя...
+            else if (message.find(".") != -1) {  
+                recipient = stoi(message.substr(0, message.find(".")));
+                cout << "Get from " << client << ": " << message << endl;
+                message = to_string(client) + "." + message.substr(message.find(".") + 1);//Добавляем номер сокета отправителя
+                ques[recipient].push_back(message);
+            }//...в случае отсутствия, отправляем всем подключенным клиентам
+            else{
+                for (int c : clients_sock_list) {
+                    if (c != client) {
+                        message = to_string(client) + "." + message;
+                        ques[c].push_back(message);
                     }
                 }
                 continue;
             }
-            
-            cout << "Get from " << client << ": " << message << endl;
-            message = to_string(client)+"."+message.substr(message.find(".") + 1);//Добавляем номер сокета отправителя
-            ques[recipient].push_back(message);
         }
-        //cout << "get/recieve msg" << endl;
     }
 }
 
@@ -132,7 +144,6 @@ void Server::sendMsg(SOCKET client) {
             message = q->back();
             cout << "Send to" << client <<": " << message << endl;
             q->pop_back();
-
             if (send(client, message.c_str(), message.size(), 0) == SOCKET_ERROR) {
                 cout << "Send failed" << std::endl;
                 work = false;
@@ -140,5 +151,33 @@ void Server::sendMsg(SOCKET client) {
             }
         }
         m.unlock();
+    }
+}
+
+void Server::sendFile(SOCKET client) {
+    char buffer[1024];
+    int file_size, data;
+    string file_name;
+
+    //получаем строку [название_файла:размер_файла]
+    data = recv(client, buffer, 1024, 0);
+    file_name = string(buffer, data);
+    cout << "get name:size";
+    //парсим строку
+    file_size = stoi(file_name.substr(file_name.find(":") + 1));
+    cout << file_size << endl;
+    file_name = file_name.substr(0, file_name.find(":"));
+    cout << file_name << endl;
+
+    //создаем файл и считываем файл из сокета
+    ofstream file(file_name, ios::binary);
+    //memset(buffer, 1024, 0);
+    int bytesReceived = 0;
+    int all_data = 0;
+    while (all_data < file_size) {
+        bytesReceived = recv(client, buffer, file_size, 0);
+        all_data += bytesReceived;
+        cout << "get file" << file_size << all_data << endl;
+        file.write(buffer, bytesReceived);
     }
 }

@@ -1,4 +1,5 @@
 #include <iostream>
+#include <fstream>
 #include <ostream>
 #include <thread>
 #include <vector>
@@ -24,13 +25,13 @@ private:
     sockaddr_in address;
     int addrlen;
     mutex m;
+    bool work;
     //int data;
     void sendMsg(SOCKET client);
 
-    bool work;
-
     void processingClientSock(SOCKET client);
     void acceptClientConnection();
+    void sendFile(SOCKET client);
 
 public:
     Server();
