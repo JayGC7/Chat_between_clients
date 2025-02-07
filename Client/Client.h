@@ -8,7 +8,6 @@
 
 #pragma comment(lib, "ws2_32.lib") // Линковка Winsock библиотеки
 
-#define PORT 8080
 using namespace std;
 class Client
 {
@@ -16,7 +15,8 @@ private:
     SOCKET client_sock;
     thread sendThread, recvThread;
     sockaddr_in serv_addr;
-    const char* ip = "127.0.0.1";
+    const char* ip;
+    int PORT;
     bool work;
     int N_try;
 
@@ -25,7 +25,7 @@ private:
     void sendFile();
     void recieveFile();
 public:
-    Client();
+    Client(const char* IP, int port);
     ~Client();
     void startClient();
 
